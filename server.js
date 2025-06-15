@@ -1,9 +1,9 @@
-// server.js
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const todosRoute = require("./routes/todos");
+const tasksRoute = require("./routes/tasks");
 
 dotenv.config();
 
@@ -29,16 +29,14 @@ app.use(
 
 app.use(express.json());
 app.use("/api/todos", todosRoute);
+app.use("/tasks", tasksRoute);
 
 module.exports = app;
 
 // Only connect and listen if run directly
 if (require.main === module) {
   mongoose
-    .connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    })
+    .connect(process.env.MONGO_URI)
     .then(() => {
       console.log("MongoDB connected");
       const PORT = process.env.PORT || 5000;

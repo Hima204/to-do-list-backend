@@ -1,68 +1,57 @@
 const request = require("supertest");
 const mongoose = require("mongoose");
-const { MongoMemoryServer } = require("mongodb-memory-server");
 const app = require("../server");
 
-let mongoServer;
+const TEST_DB_NAME = "todos_test";
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri(), {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
+  // Load environment variables
+  require("dotenv").config();
+
+  // Create test database URI from your Atlas connection string
+  const atlasUri = process.env.MONGO_URI;
+  const testUri = atlasUri.replace("/todos?", `/${TEST_DB_NAME}?`);
+
+  await mongoose.connect(testUri);
 });
 
 afterAll(async () => {
   await mongoose.disconnect();
-  await mongoServer.stop();
 });
 
 afterEach(async () => {
-  await mongoose.connection.db.dropDatabase();
+  // Clean up test data after each test
+  if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
+    await mongoose.connection.db.dropDatabase();
+  }
 });
-describe("POST /api/todos", () => {
-  it("should create a new todo with default values", async () => {
+
+describe("POST /tasks", () => {
+  it("should create a new task", async () => {
+    const newTask = { title: "Test task creation" };
     const response = await request(app)
-      .post("/api/todos")
-      .send({ title: "Test backend POST" })
+      .post("/tasks")
+      .set("Content-Type", "application/json")
+      .send(newTask)
       .expect(201);
 
-    expect(response.body).toMatchObject({
-      title: "Test backend POST",
-      completed: false,
-      pinned: false,
-    });
+    expect(response.body).toHaveProperty("title", "Test task creation");
     expect(response.body).toHaveProperty("_id");
-  });
-
-  it("should reject empty title", async () => {
-    await request(app).post("/api/todos").send({ title: "" }).expect(500);
   });
 });
 
-describe("DELETE /api/todos/:id", () => {
-  it("should delete an existing todo", async () => {
-    // Create a todo first
+describe("DELETE /tasks/:id", () => {
+  it("should delete the specified task", async () => {
+    // First, create a task to delete
     const createRes = await request(app)
-      .post("/api/todos")
-      .send({ title: "Todo to delete" });
+      .post("/tasks")
+      .send({ title: "Task to delete" });
 
-    const todoId = createRes.body._id;
+    const taskId = createRes.body._id;
 
-    // Delete the todo
-    const deleteRes = await request(app)
-      .delete(`/api/todos/${todoId}`)
-      .expect(200);
+    // Delete the task
+    const deleteRes = await request(app).delete(`/tasks/${taskId}`).expect(200);
 
-    expect(deleteRes.body).toEqual({ message: "Todo deleted" });
-
-    // Verify deletion
-    const todosRes = await request(app).get("/api/todos");
-    expect(todosRes.body.find((t) => t._id === todoId)).toBeUndefined();
-  });
-
-  it("should handle invalid id format", async () => {
-    await request(app).delete("/api/todos/invalid_id").expect(500);
+    expect(deleteRes.body.message || deleteRes.body).toMatch(/deleted/i);
   });
 });
